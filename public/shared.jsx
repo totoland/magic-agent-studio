@@ -136,7 +136,16 @@ function mdInline(s) {
     .replace(/`(.+?)`/g, '<code style="font-family:var(--mono);background:var(--surface-3);padding:1px 5px;border-radius:5px;font-size:.92em;color:var(--accent-fg)">$1</code>');
 }
 
+// full markdown → sanitized HTML for result blocks (headings, lists, tables, hr, code).
+// Falls back to the tiny inline renderer if the CDN libs haven't loaded.
+function mdToHtml(s) {
+  const src = String(s || "");
+  if (!window.marked) return mdInline(src);
+  const html = window.marked.parse(src, { gfm: true, breaks: true });
+  return window.DOMPurify ? window.DOMPurify.sanitize(html) : html;
+}
+
 Object.assign(window, {
-  Icon, StatusDot, ModelBadge, ToolChip, Btn, useClickOutside, mdInline, STATUS,
+  Icon, StatusDot, ModelBadge, ToolChip, Btn, useClickOutside, mdInline, mdToHtml, STATUS,
   useState, useEffect, useRef, useCallback,
 });

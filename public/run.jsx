@@ -1,5 +1,22 @@
 // run.jsx — Run tab, live streaming right panel, Activity tab
-const { Icon, Btn, Avatar, StatusDot, mdInline } = window;
+const { Icon, Btn, Avatar, StatusDot, mdInline, mdToHtml } = window;
+
+// Copy-to-clipboard button (copies the raw markdown so it re-pastes cleanly)
+function CopyBtn({ text, label = "Copy" }) {
+  const [copied, setCopied] = React.useState(false);
+  const onCopy = () => {
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1400); };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(done).catch(done);
+    else done();
+  };
+  return (
+    <button onClick={onCopy} title="Copy result as markdown"
+      className="flex items-center gap-1 text-[10.5px] rounded-md px-1.5 py-0.5 transition-colors hover:bg-[var(--hover2)]"
+      style={{ color: copied ? "var(--success)" : "var(--muted)" }}>
+      <Icon name={copied ? "check" : "copy"} size={12} /> {copied ? "Copied" : label}
+    </button>
+  );
+}
 
 // ── RUN TAB ──────────────────────────────────────────────────────────────────
 function RunTab({ agent, task, setTask, running, onRun, onStop, onOpenPanel, panelOpen, injectContext, setInjectContext, contextInfo }) {
@@ -102,8 +119,11 @@ function EventNode({ ev, last }) {
       <div className="event-in pl-9 relative">
         <span className="absolute left-1 top-0.5 grid place-items-center w-5 h-5 rounded-md" style={{ background: "color-mix(in srgb, var(--success) 18%, transparent)", color: "var(--success)" }}><Icon name="check" size={13} /></span>
         <div className="rounded-xl border p-3.5" style={{ borderColor: "color-mix(in srgb, var(--success) 28%, var(--border))", background: "color-mix(in srgb, var(--success) 6%, var(--surface-2))" }}>
-          <div className="text-[10.5px] uppercase tracking-wider font-semibold mb-1.5" style={{ color: "var(--success)" }}>Result</div>
-          <div className="text-[13px] leading-relaxed" style={{ color: "var(--text)" }} dangerouslySetInnerHTML={{ __html: mdInline(ev.text) }} />
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[10.5px] uppercase tracking-wider font-semibold" style={{ color: "var(--success)" }}>Result</div>
+            <CopyBtn text={ev.text} />
+          </div>
+          <div className="md-body" dangerouslySetInnerHTML={{ __html: mdToHtml(ev.text) }} />
         </div>
       </div>
     );
