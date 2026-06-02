@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root, [data-theme="dark"] {
+    --bg: #14110e;
+    --surface-1: #1a1613;
+    --surface-2: #221d19;
+    --surface-3: #2c2620;
+    --border: rgba(255,255,255,0.075);
+    --text: #ece7e1;
+    --muted: #9d958b;
+    --faint: #6c645b;
+    --idle: #837b71;
+    --running: #f5a623;
+    --success: #34d399;
+    --error: #f87171;
+    --accent: #6366f1;
+    --accent-fg: #a5a9ff;
+    --hover: rgba(255,255,255,.06);
+    --hover2: rgba(255,255,255,.105);
+    --scrollbar: rgba(255,255,255,.09);
+    --scrollbar-h: rgba(255,255,255,.17);
+    --shadow: 0 16px 50px rgba(0,0,0,.5);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --ui: 'Geist', system-ui, sans-serif;
+  }
+  [data-theme="light"] {
+    --bg: #f3f1ec;
+    --surface-1: #ffffff;
+    --surface-2: #f0ede7;
+    --surface-3: #ffffff;
+    --border: rgba(34,27,20,0.11);
+    --text: #221d18;
+    --muted: #6d635a;
+    --faint: #a89e92;
+    --idle: #a89e92;
+    --running: #d97706;
+    --success: #059669;
+    --error: #dc2626;
+    --accent: #6366f1;
+    --accent-fg: #4f46e5;
+    --hover: rgba(34,24,15,.045);
+    --hover2: rgba(34,24,15,.075);
+    --scrollbar: rgba(34,24,15,.16);
+    --scrollbar-h: rgba(34,24,15,.28);
+    --shadow: 0 16px 44px rgba(60,45,30,.16);
+  }
+  html.theme-anim, html.theme-anim * {
+    transition: background-color .42s ease, border-color .42s ease, color .3s ease, fill .3s ease, box-shadow .42s ease !important;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); }
+  body { font-family: var(--ui); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  .font-mono, code, textarea, input[class*="font-mono"] { font-family: var(--mono); }
+
+  /* thin scrollbars */
+  .scroll-thin::-webkit-scrollbar { width: 9px; height: 9px; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  .scroll-thin::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-h); background-clip: padding-box; }
+  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+  /* animations */
+  @keyframes pingSoft { 0% { transform: scale(1); opacity: .6; } 80%,100% { transform: scale(2.4); opacity: 0; } }
+  .animate-ping-soft { animation: pingSoft 1.6s cubic-bezier(0,0,.2,1) infinite; }
+  @keyframes eventIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .event-in { animation: eventIn .34s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes menuPop { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
+  .menu-pop { animation: menuPop .14s ease-out both; transform-origin: top; }
+  @keyframes modalPop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+  .modal-pop { animation: modalPop .2s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+  .overlay-in { animation: overlayIn .16s ease-out both; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  .toast-in { animation: toastIn .26s cubic-bezier(.2,.7,.2,1) both; }
+
+  /* density */
+  [data-density="compact"] { font-size: 13.5px; }
+  [data-density="comfy"] { font-size: 14px; }
+
+  ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+  textarea, input { caret-color: var(--accent); }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#14110e">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#14110e"/>
+    <defs>
+      <linearGradient id="tg" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0" stop-color="#818cf8"/>
+        <stop offset="1" stop-color="#4f46e5"/>
+      </linearGradient>
+    </defs>
+    <rect x="486" y="250" width="228" height="228" rx="58" fill="url(#tg)"/>
+    <circle cx="552" cy="372" r="17" fill="rgba(28,22,18,.82)"/>
+    <circle cx="648" cy="372" r="17" fill="rgba(28,22,18,.82)"/>
+    <path d="M600 300v40M600 404v40M548 372h-40M692 372h40" stroke="rgba(255,255,255,.85)" stroke-width="10" stroke-linecap="round"/>
+    <text x="600" y="560" font-family="ui-monospace, monospace" font-size="42" fill="#ece7e1" text-anchor="middle" letter-spacing="2">Totoland Agent Studio</text>
+  </svg>
+</template>
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="avatars.jsx"></script>
+<script type="text/babel" src="sidebar.jsx"></script>
+<script type="text/babel" src="persona.jsx"></script>
+<script type="text/babel" src="run.jsx"></script>
+<script type="text/babel" src="modals.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
