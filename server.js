@@ -11,6 +11,7 @@ import {
 } from "./lib/agents.js";
 import { runAgent } from "./lib/runner.js";
 import { listRoutines, setEnabled } from "./lib/routines.js";
+import { getSharedContext } from "./lib/context.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -35,10 +36,17 @@ app.post("/api/agents/:id/duplicate", wrap(async (req, res) => res.json(await du
 app.get("/api/routines", wrap(async (_req, res) => res.json(await listRoutines())));
 app.put("/api/routines/:id", wrap(async (req, res) => res.json(await setEnabled(req.params.id, !!req.body.enabled))));
 
+// ── Shared "team context" (hot-core L1) preview, for the Run-tab meter ──────────
+app.get("/api/context", wrap(async (_req, res) => {
+  const c = await getSharedContext();
+  res.json({ available: c.available, tokensEstimate: c.tokensEstimate, chars: c.chars, capped: c.capped });
+}));
+
 // ── Run (Server-Sent Events) ─────────────────────────────────────────────────
 // GET /api/run?agentId=...&task=...&label=...
 app.get("/api/run", async (req, res) => {
   const { agentId, task = "", label } = req.query;
+  const wantContext = (req.query.context ?? "on") !== "off";
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -57,8 +65,14 @@ app.get("/api/run", async (req, res) => {
   }
   if (label) send({ kind: "label", text: label });
 
+  let sharedContext = null;
+  if (wantContext) {
+    const ctx = await getSharedContext();
+    if (ctx.available) { sharedContext = ctx.text; send({ kind: "context", tokens: ctx.tokensEstimate }); }
+  }
+
   const handle = runAgent(
-    { task: String(task), body: agent.body, model: agent.model, tools: agent.tools },
+    { task: String(task), body: agent.body, model: agent.model, tools: agent.tools, sharedContext },
     (evt) => {
       send(evt);
       if (evt.kind === "done") res.end();

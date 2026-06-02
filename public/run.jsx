@@ -2,7 +2,7 @@
 const { Icon, Btn, Avatar, StatusDot, mdInline } = window;
 
 // ── RUN TAB ──────────────────────────────────────────────────────────────────
-function RunTab({ agent, task, setTask, running, onRun, onStop, onOpenPanel, panelOpen }) {
+function RunTab({ agent, task, setTask, running, onRun, onStop, onOpenPanel, panelOpen, injectContext, setInjectContext, contextInfo }) {
   const suggestions = {
     "crypto-analyst": ["Give me a read on BTC right now", "Is the alt move real or leverage?", "Top mover in the last 24h + why"],
     "knowledge-curator": ["Tidy the AI shelf and fix orphans", "Index this week's new notes", "Merge duplicate RAG notes"],
@@ -30,7 +30,21 @@ function RunTab({ agent, task, setTask, running, onRun, onStop, onOpenPanel, pan
             className="w-full resize-none outline-none bg-transparent px-2 pt-1.5 leading-relaxed scroll-thin"
             style={{ minHeight: 76, fontSize: 14, color: "var(--text)" }} />
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] font-mono pl-2" style={{ color: "var(--faint)" }}>⌘↵ to run</span>
+            <div className="flex items-center gap-3 pl-2">
+              <span className="text-[11px] font-mono" style={{ color: "var(--faint)" }}>⌘↵ to run</span>
+              <button type="button" onClick={() => setInjectContext((v) => !v)} disabled={running}
+                title="Already auto-loaded via ~/.claude/CLAUDE.md. Toggle ON only to re-inject/emphasize team context as a cached prefix (costs ~377 extra tok)."
+                className="flex items-center gap-1.5 text-[11px] rounded-lg px-2 py-1 border transition-colors disabled:opacity-40"
+                style={{ borderColor: "var(--border)",
+                  color: injectContext ? "var(--accent-fg)" : "var(--muted)",
+                  background: injectContext ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "transparent" }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: injectContext ? "var(--accent)" : "var(--faint)" }} />
+                🧠 team context {injectContext ? "on" : "off"}
+                {injectContext && contextInfo?.available && (
+                  <span className="font-mono" style={{ color: "var(--faint)" }}>· ~{contextInfo.tokensEstimate} tok</span>
+                )}
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {!panelOpen && (
                 <Btn variant="subtle" size="md" onClick={onOpenPanel}><Icon name="panel" size={14} /> Show output</Btn>
@@ -162,6 +176,14 @@ function RightPanel({ agent, run, onClose, onStop, onClear }) {
           </div>
         ))}
       </div>
+
+      {/* context + cache meter */}
+      {(run.contextTokens > 0 || run.cached > 0) && (
+        <div className="flex items-center gap-3 px-4 py-1.5 border-b shrink-0 text-[10.5px] font-mono" style={{ borderColor: "var(--border)", color: "var(--faint)" }}>
+          {run.contextTokens > 0 && <span title="team context injected as a cached prefix">🧠 context ~{run.contextTokens} tok</span>}
+          {run.cached > 0 && <span style={{ color: "var(--success)" }} title="prompt-cache hit — this much of the prompt was read from cache (~10% cost)">⚡ {run.cached.toLocaleString()} cached</span>}
+        </div>
+      )}
 
       {/* timeline */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto scroll-thin px-4 py-4 space-y-3.5">

@@ -96,8 +96,10 @@ function App() {
   const [drafts, setDrafts] = useState({});
   const [taskByAgent, setTaskByAgent] = useState({});
   const [historyByAgent, setHistoryByAgent] = useState({});
+  const [injectContext, setInjectContext] = useState(false); // OFF by default: team-context already auto-loads via ~/.claude/CLAUDE.md. This is an optional re-inject/emphasis override.
+  const [contextInfo, setContextInfo] = useState(null);      // {available, tokensEstimate} from /api/context
 
-  const [run, setRun] = useState({ status: "idle", events: [], tokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
+  const [run, setRun] = useState({ status: "idle", events: [], tokens: 0, cached: 0, contextTokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
   const [modal, setModal] = useState(null);
   const [savePulse, setSavePulse] = useState(false);
   const [toast, setToast] = useState(null); // {kind:'error'|'ok', msg}
@@ -114,9 +116,12 @@ function App() {
   useEffect(() => {
     (async () => {
       try {
-        const [ags, rts] = await Promise.all([api.get("/api/agents"), api.get("/api/routines")]);
+        const [ags, rts, ctx] = await Promise.all([
+          api.get("/api/agents"), api.get("/api/routines"), api.get("/api/context").catch(() => null),
+        ]);
         setAgents(ags);
         setRoutines(rts);
+        setContextInfo(ctx);
         setDrafts(Object.fromEntries(ags.map((a) => [a.id, snapshot(a)])));
         if (ags.length) setSelId(ags[0].id);
       } catch (err) {
@@ -188,7 +193,7 @@ function App() {
     closeStream(); stopTicker();
     setPanelOpen(true);
     setAgentStatus(targetAgent.id, "running");
-    setRun({ status: "running", events: [], tokens: 0, elapsed: 0, target: label || targetAgent.name, agentId: targetAgent.id, task: taskText });
+    setRun({ status: "running", events: [], tokens: 0, cached: 0, contextTokens: 0, elapsed: 0, target: label || targetAgent.name, agentId: targetAgent.id, task: taskText });
 
     const startAt = Date.now();
     ticker.current = setInterval(() => {
@@ -196,7 +201,8 @@ function App() {
     }, 90);
 
     const url = `/api/run?agentId=${encodeURIComponent(targetAgent.id)}&task=${encodeURIComponent(taskText || "")}` +
-      (label ? `&label=${encodeURIComponent(label)}` : "");
+      (label ? `&label=${encodeURIComponent(label)}` : "") +
+      `&context=${injectContext ? "on" : "off"}`;
     const es = new EventSource(url);
     esRef.current = es;
 
@@ -220,6 +226,8 @@ function App() {
       switch (ev.kind) {
         case "label":
           setRun((r) => ({ ...r, target: ev.text })); break;
+        case "context":
+          setRun((r) => ({ ...r, contextTokens: ev.tokens || 0 })); break;
         case "start":
           setRun((r) => ({ ...r, events: [...r.events, { kind: "start", text: ev.text, id: uid(), ts: nowTs() }] })); break;
         case "thinking":
@@ -229,13 +237,13 @@ function App() {
         case "tool_update":
           setRun((r) => ({ ...r, events: r.events.map((x) => (x.id === ev.id ? { ...x, state: ev.state, result: ev.result } : x)) })); break;
         case "tokens":
-          setRun((r) => ({ ...r, tokens: ev.tokens || r.tokens })); break;
+          setRun((r) => ({ ...r, tokens: ev.tokens || r.tokens, cached: ev.cached ?? r.cached })); break;
         case "result":
           setRun((r) => ({ ...r, tokens: ev.tokens || r.tokens, events: [...r.events, { kind: "result", text: ev.text, id: uid(), ts: nowTs() }] })); break;
         case "error":
           setRun((r) => ({ ...r, events: [...r.events, { kind: "result", text: "⚠️ **Error** — " + ev.text, id: uid(), ts: nowTs(), error: true }] })); break;
         case "done":
-          setRun((r) => ({ ...r, tokens: ev.tokens || r.tokens }));
+          setRun((r) => ({ ...r, tokens: ev.tokens || r.tokens, cached: ev.cached ?? r.cached }));
           finish(ev.status || "completed"); break;
       }
     };
@@ -255,7 +263,7 @@ function App() {
   }
   function clearRun() {
     closeStream(); stopTicker();
-    setRun({ status: "idle", events: [], tokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
+    setRun({ status: "idle", events: [], tokens: 0, cached: 0, contextTokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
   }
   function triggerRun() {
     const task = (taskByAgent[agent.id] || "").trim();
@@ -393,7 +401,7 @@ function App() {
 
             <div className="flex-1 min-h-0">
               {activeTab === "persona" && <PersonaTab agent={agent} draft={draft} setDraft={setDraft} dirty={dirty} onSave={saveDraft} onRevert={revertDraft} />}
-              {activeTab === "run" && <RunTab agent={agent} task={taskByAgent[agent.id] || ""} setTask={(v) => setTaskByAgent((m) => ({ ...m, [agent.id]: v }))} running={run.status === "running" && run.agentId === agent.id} onRun={triggerRun} onStop={stopRun} onOpenPanel={() => setPanelOpen(true)} panelOpen={panelOpen} />}
+              {activeTab === "run" && <RunTab agent={agent} task={taskByAgent[agent.id] || ""} setTask={(v) => setTaskByAgent((m) => ({ ...m, [agent.id]: v }))} running={run.status === "running" && run.agentId === agent.id} onRun={triggerRun} onStop={stopRun} onOpenPanel={() => setPanelOpen(true)} panelOpen={panelOpen} injectContext={injectContext} setInjectContext={setInjectContext} contextInfo={contextInfo} />}
               {activeTab === "activity" && <ActivityTab agent={agent} history={history} onRerun={(task) => { setActiveTab("run"); setTaskByAgent((m) => ({ ...m, [agent.id]: task })); }} />}
             </div>
           </>
