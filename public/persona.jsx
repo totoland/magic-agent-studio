@@ -89,7 +89,8 @@ function Field({ label, hint, children }) {
 
 function PersonaTab({ agent, draft, setDraft, dirty, onSave, onRevert }) {
   const [pickerOpen, setPickerOpen] = React.useState(false);
-  React.useEffect(() => setPickerOpen(false), [agent.id]);
+  const [promptOpen, setPromptOpen] = React.useState(false); // system prompt collapsed by default
+  React.useEffect(() => { setPickerOpen(false); setPromptOpen(false); }, [agent.id]);
   const avatarAgent = { name: draft.name, color: agent.color, avatar: draft.avatar };
   const charCount = draft.body.length;
   const inputCls = "w-full h-9 px-3 rounded-lg border text-[13px] outline-none transition-colors focus:border-[color-mix(in_srgb,var(--accent)_55%,transparent)]";
@@ -157,19 +158,35 @@ function PersonaTab({ agent, draft, setDraft, dirty, onSave, onRevert }) {
           </div>
         </Field>
 
-        {/* system prompt */}
+        {/* system prompt — collapsed by default; click to edit */}
         <Field label="System prompt" hint="the agent’s soul">
           <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-            <div className="flex items-center justify-between px-3 h-8 border-b" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
-              <span className="text-[10.5px] font-mono uppercase tracking-wider" style={{ color: "var(--faint)" }}>markdown</span>
-              <span className="text-[11px] font-mono tabular-nums" style={{ color: charCount > 1800 ? "var(--running)" : "var(--muted)" }}>
-                {charCount.toLocaleString()} chars
+            <button type="button" onClick={() => setPromptOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-3 h-9 border-b transition-colors hover:bg-[var(--hover)]"
+              style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+              <span className="flex items-center gap-2">
+                <Icon name="chevron" size={14} style={{ color: "var(--muted)", transform: promptOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                <span className="text-[10.5px] font-mono uppercase tracking-wider" style={{ color: "var(--faint)" }}>markdown</span>
               </span>
-            </div>
-            <textarea value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })}
-              spellCheck={false}
-              className="w-full resize-y outline-none p-4 leading-[1.65] scroll-thin"
-              style={{ minHeight: 320, fontFamily: "var(--mono)", fontSize: 13, color: "var(--text)", background: "transparent" }} />
+              <span className="flex items-center gap-3">
+                <span className="text-[11px] font-mono tabular-nums" style={{ color: charCount > 1800 ? "var(--running)" : "var(--muted)" }}>{charCount.toLocaleString()} chars</span>
+                <span className="text-[11px] font-medium" style={{ color: "var(--accent-fg)" }}>{promptOpen ? "Hide" : "Edit"}</span>
+              </span>
+            </button>
+            {promptOpen ? (
+              <textarea value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                spellCheck={false} autoFocus
+                className="w-full resize-y outline-none p-4 leading-[1.65] scroll-thin"
+                style={{ minHeight: 320, fontFamily: "var(--mono)", fontSize: 13, color: "var(--text)", background: "transparent" }} />
+            ) : (
+              <button type="button" onClick={() => setPromptOpen(true)}
+                className="block w-full text-left px-4 py-3 transition-colors hover:bg-[var(--hover)]"
+                style={{ maxHeight: 84, overflow: "hidden" }}>
+                <span className="font-mono text-[12.5px] leading-[1.6] whitespace-pre-wrap" style={{ color: "var(--muted)" }}>
+                  {draft.body.trim() ? draft.body.trim().slice(0, 200) + (draft.body.trim().length > 200 ? " …" : "") : "Empty — click to write the system prompt…"}
+                </span>
+              </button>
+            )}
           </div>
         </Field>
       </div>
