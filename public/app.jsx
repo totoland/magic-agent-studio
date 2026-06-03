@@ -2,7 +2,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 const {
   Icon, Btn, Avatar, StatusDot, ModelBadge,
-  Sidebar, PersonaTab, RunTab, RightPanel, ActivityTab,
+  Sidebar, PersonaTab, RunTab, ChatTab, RightPanel, ActivityTab,
   NewAgentModal, ConfirmDialog, RoutineDetail,
   useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSelect,
 } = window;
@@ -97,6 +97,7 @@ function App() {
   const [taskByAgent, setTaskByAgent] = useState({});
   const [historyByAgent, setHistoryByAgent] = useState({});
   const [injectContext, setInjectContext] = useState(false); // OFF by default: team-context already auto-loads via ~/.claude/CLAUDE.md. This is an optional re-inject/emphasis override.
+  const [chatByAgent, setChatByAgent] = useState({}); // { [agentId]: { sessionId, messages:[{id,role,text,events,streaming}] } }
   const [contextInfo, setContextInfo] = useState(null);      // {available, tokensEstimate} from /api/context
 
   const [run, setRun] = useState({ status: "idle", events: [], tokens: 0, cached: 0, contextTokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
@@ -106,6 +107,7 @@ function App() {
 
   const esRef = useRef(null);
   const ticker = useRef(null);
+  const chatEsRef = useRef(null);
 
   const agent = agents.find((a) => a.id === selId);
   const routine = routines.find((r) => r.id === selId);
@@ -271,6 +273,64 @@ function App() {
     runAgent(agent, task);
   }
 
+  // ── chat (multi-turn, resumes a session) ──
+  function patchLastAssistant(agentId, fn) {
+    setChatByAgent((m) => {
+      const th = m[agentId]; if (!th) return m;
+      const msgs = th.messages.slice();
+      for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i].role === "assistant") { msgs[i] = fn(msgs[i]); break; } }
+      return { ...m, [agentId]: { ...th, messages: msgs } };
+    });
+  }
+  function closeChatStream() { if (chatEsRef.current) { chatEsRef.current.close(); chatEsRef.current = null; } }
+
+  function sendChat(agent, text) {
+    closeChatStream();
+    const aId = agent.id;
+    const sessionId = chatByAgent[aId] && chatByAgent[aId].sessionId;
+    const uMsg = { id: uid(), role: "user", text };
+    const aMsg = { id: uid(), role: "assistant", text: "", events: [], streaming: true };
+    setChatByAgent((m) => {
+      const th = m[aId] || { sessionId: null, messages: [] };
+      return { ...m, [aId]: { ...th, messages: [...th.messages, uMsg, aMsg] } };
+    });
+
+    const url = `/api/chat?agentId=${encodeURIComponent(aId)}&message=${encodeURIComponent(text)}&context=off` +
+      (sessionId ? `&session=${encodeURIComponent(sessionId)}` : "");
+    const es = new EventSource(url);
+    chatEsRef.current = es;
+    es.onmessage = (e) => {
+      let ev; try { ev = JSON.parse(e.data); } catch { return; }
+      switch (ev.kind) {
+        case "session":
+          setChatByAgent((m) => (m[aId] ? { ...m, [aId]: { ...m[aId], sessionId: ev.id } } : m)); break;
+        case "thinking":
+          patchLastAssistant(aId, (a) => ({ ...a, events: [...a.events, { kind: "thinking", text: ev.text }] })); break;
+        case "tool":
+          patchLastAssistant(aId, (a) => ({ ...a, events: [...a.events, { kind: "tool", id: ev.id, icon: ev.icon, label: ev.label, arg: ev.arg, state: "pending" }] })); break;
+        case "tool_update":
+          patchLastAssistant(aId, (a) => ({ ...a, events: a.events.map((x) => (x.id === ev.id ? { ...x, state: ev.state, result: ev.result } : x)) })); break;
+        case "result":
+          patchLastAssistant(aId, (a) => ({ ...a, text: ev.text })); break;
+        case "error":
+          patchLastAssistant(aId, (a) => ({ ...a, text: (a.text ? a.text + "\n\n" : "") + "⚠️ **Error** — " + ev.text })); break;
+        case "done":
+          closeChatStream();
+          patchLastAssistant(aId, (a) => ({ ...a, streaming: false,
+            text: a.text || a.events.filter((x) => x.kind === "thinking").map((x) => x.text).join("\n\n") || "(no response)" }));
+          break;
+      }
+    };
+    es.onerror = () => {
+      closeChatStream();
+      patchLastAssistant(aId, (a) => (a.streaming ? { ...a, streaming: false, text: a.text || "⚠️ connection lost" } : a));
+    };
+  }
+  function newChat(agentId) {
+    closeChatStream();
+    setChatByAgent((m) => ({ ...m, [agentId]: { sessionId: null, messages: [] } }));
+  }
+
   // ── create / clone / delete (real API) ──
   async function createAgent(name, tpl, avatar) {
     try {
@@ -324,8 +384,10 @@ function App() {
     else flash("error", `Agent "${r.agentId}" not found for this routine.`);
   }
 
-  const tabs = [{ id: "persona", label: "Persona" }, { id: "run", label: "Run" }, { id: "activity", label: "Activity" }];
+  const tabs = [{ id: "persona", label: "Persona" }, { id: "chat", label: "Chat" }, { id: "run", label: "Run" }, { id: "activity", label: "Activity" }];
   const history = agent ? (historyByAgent[agent.id] || []) : [];
+  const chatThread = agent ? chatByAgent[agent.id] : null;
+  const chatStreaming = (() => { const l = chatThread && chatThread.messages[chatThread.messages.length - 1]; return !!(l && l.role === "assistant" && l.streaming); })();
 
   if (loading) {
     return (
@@ -384,7 +446,7 @@ function App() {
                       ? { background: "var(--surface-3)", color: "var(--text)", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }
                       : { color: "var(--muted)" }}>
                     {tab.label}
-                    {tab.id === "run" && run.status === "running" && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "var(--running)" }} />}
+                    {((tab.id === "run" && run.status === "running") || (tab.id === "chat" && chatStreaming)) && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "var(--running)" }} />}
                   </button>
                 ))}
               </div>
@@ -401,6 +463,7 @@ function App() {
 
             <div className="flex-1 min-h-0">
               {activeTab === "persona" && <PersonaTab agent={agent} draft={draft} setDraft={setDraft} dirty={dirty} onSave={saveDraft} onRevert={revertDraft} />}
+              {activeTab === "chat" && <ChatTab agent={agent} thread={chatThread} onSend={(t) => sendChat(agent, t)} onNewChat={() => newChat(agent.id)} />}
               {activeTab === "run" && <RunTab agent={agent} task={taskByAgent[agent.id] || ""} setTask={(v) => setTaskByAgent((m) => ({ ...m, [agent.id]: v }))} running={run.status === "running" && run.agentId === agent.id} onRun={triggerRun} onStop={stopRun} onOpenPanel={() => setPanelOpen(true)} panelOpen={panelOpen} injectContext={injectContext} setInjectContext={setInjectContext} contextInfo={contextInfo} />}
               {activeTab === "activity" && <ActivityTab agent={agent} history={history} onRerun={(task) => { setActiveTab("run"); setTaskByAgent((m) => ({ ...m, [agent.id]: task })); }} />}
             </div>

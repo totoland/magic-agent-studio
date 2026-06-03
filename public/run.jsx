@@ -266,4 +266,4 @@ function ActivityTab({ agent, history, onRerun }) {
   );
 }
 
-Object.assign(window, { RunTab, RightPanel, ActivityTab });
+Object.assign(window, { RunTab, RightPanel, ActivityTab, CopyBtn });

@@ -85,6 +85,52 @@ app.get("/api/run", async (req, res) => {
   res.on("close", () => clearInterval(ping));
 });
 
+// ── Chat (Server-Sent Events) — multi-turn, resumes a session ─────────────────
+// GET /api/chat?agentId=...&message=...&session=<id?>&context=on|off
+// First turn (no session): injects persona (+ optional context). Resume turns
+// (session given): no re-inject — the stored session already has the system prompt.
+app.get("/api/chat", async (req, res) => {
+  const { agentId, message = "", session } = req.query;
+  const isResume = !!session;
+  const wantContext = (req.query.context ?? "off") !== "off"; // chat relies on CLAUDE.md by default
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const send = (evt) => res.write(`data: ${JSON.stringify(evt)}\n\n`);
+
+  let agent;
+  try {
+    agent = await getAgent(agentId);
+  } catch {
+    send({ kind: "error", text: `Agent not found: ${agentId}` });
+    send({ kind: "done", status: "error", tokens: 0 });
+    return res.end();
+  }
+
+  let sharedContext = null;
+  if (!isResume && wantContext) {
+    const ctx = await getSharedContext();
+    if (ctx.available) { sharedContext = ctx.text; send({ kind: "context", tokens: ctx.tokensEstimate }); }
+  }
+
+  const handle = runAgent(
+    {
+      task: String(message), model: agent.model, tools: agent.tools,
+      body: isResume ? null : agent.body,
+      sharedContext: isResume ? null : sharedContext,
+      resumeSessionId: isResume ? String(session) : null,
+    },
+    (evt) => { send(evt); if (evt.kind === "done") res.end(); }
+  );
+
+  const ping = setInterval(() => res.write(": ping\n\n"), 15000);
+  req.on("close", () => { clearInterval(ping); handle.stop(); });
+  res.on("close", () => clearInterval(ping));
+});
+
 // ── Static: avatars + the app ────────────────────────────────────────────────
 app.use("/avatars", express.static(AVATARS_DIR));
 app.use(express.static(path.join(__dirname, "public")));
