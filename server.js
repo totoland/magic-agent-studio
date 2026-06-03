@@ -16,6 +16,10 @@ import { getSharedContext } from "./lib/context.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 4317;
+// Bind localhost by default (the app has no auth and runs tools — don't expose it
+// raw on a LAN). Put Cloudflare Tunnel / SSH in front. Set HOST=0.0.0.0 only with
+// an auth proxy ahead of it.
+const HOST = process.env.HOST || "127.0.0.1";
 
 app.use(express.json({ limit: "12mb" })); // base64 avatars can be chunky
 
@@ -135,6 +139,6 @@ app.get("/api/chat", async (req, res) => {
 app.use("/avatars", express.static(AVATARS_DIR));
 app.use(express.static(path.join(__dirname, "public")));
 
-app.listen(PORT, () => {
-  console.log(`\n  🎛  Agent Studio  →  http://localhost:${PORT}\n`);
+app.listen(PORT, HOST, () => {
+  console.log(`\n  🎛  Agent Studio  →  http://${HOST}:${PORT}  (bound: ${HOST})\n`);
 });

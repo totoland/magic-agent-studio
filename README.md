@@ -15,7 +15,10 @@ npm start
 # → http://localhost:4317
 ```
 
-(Set `PORT=xxxx` to change the port.)
+(Set `PORT=xxxx` / `HOST=xxxx` to change port/bind — defaults to `127.0.0.1:4317`. See `.env.example`.)
+
+**Deploy to an always-on server (Mac mini):** see [`deploy/README.md`](deploy/README.md) —
+`bash deploy/setup.sh` installs a launchd service; reach it securely via Cloudflare Tunnel + Access.
 
 ## What's real
 
