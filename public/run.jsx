@@ -162,7 +162,7 @@ function RightPanel({ agent, run, onClose, onStop, onClear }) {
   }[run.status] || { label: "Idle", color: "var(--idle)" };
 
   return (
-    <aside className="flex flex-col h-full border-l shrink-0" style={{ width: 400, borderColor: "var(--border)", background: "var(--surface-1)" }}>
+    <aside className="flex flex-col h-full border-l shrink-0 w-screen max-w-[420px] md:w-[400px]" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
       <div className="flex items-center justify-between px-4 h-14 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-2.5">
           <StatusDot status={run.status === "running" ? "running" : run.status === "completed" ? "success" : (run.status === "stopped" || run.status === "error") ? "error" : "idle"} />

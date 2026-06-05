@@ -29,9 +29,12 @@ const ACCENTS = {
   amber:  { accent: "#f59e0b", fgDark: "#fcd34d", fgLight: "#b45309" },
 };
 
-function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running }) {
+function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, onMenu }) {
   return (
-    <header className="flex items-center gap-4 px-4 border-b shrink-0" style={{ height: 54, borderColor: "var(--border)", background: "var(--surface-1)" }}>
+    <header className="flex items-center gap-2 md:gap-4 px-2.5 md:px-4 border-b shrink-0" style={{ height: 54, borderColor: "var(--border)", background: "var(--surface-1)" }}>
+      <button onClick={onMenu} aria-label="Menu" className="md:hidden grid place-items-center w-9 h-9 rounded-lg shrink-0 hover:bg-[var(--hover2)] transition" style={{ color: "var(--muted)" }}>
+        <Icon name="menu" size={18} />
+      </button>
       <div className="flex items-center gap-2.5 shrink-0">
         <span className="grid place-items-center w-8 h-8 rounded-xl text-white shadow-sm" style={{ background: "linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000))" }}>
           <Icon name="spark" size={17} />
@@ -90,7 +93,8 @@ function App() {
   const [selId, setSelId] = useState(null);
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState("persona");
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true)); // closed by default on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer; on desktop the sidebar is always shown
   const [theme, setTheme] = useState("dark");
 
   const [drafts, setDrafts] = useState({});
@@ -160,8 +164,9 @@ function App() {
   function selectAgent(id) {
     setSelKind("agent"); setSelId(id);
     setDrafts((m) => (m[id] ? m : { ...m, [id]: snapshot(agents.find((a) => a.id === id)) }));
+    setSidebarOpen(false); // close the mobile drawer on selection
   }
-  function selectRoutine(id) { setSelKind("routine"); setSelId(id); }
+  function selectRoutine(id) { setSelKind("routine"); setSelId(id); setSidebarOpen(false); }
 
   // ── persona save / revert (real PUT) ──
   async function saveDraft() {
@@ -414,34 +419,39 @@ function App() {
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--ui)" }}>
       <TopBar query={query} setQuery={setQuery} theme={theme} onToggleTheme={toggleTheme}
-        agentCount={agents.length} running={agents.filter((a) => a.status === "running").length} />
+        agentCount={agents.length} running={agents.filter((a) => a.status === "running").length}
+        onMenu={() => setSidebarOpen((o) => !o)} />
 
       <div className="flex-1 flex min-h-0">
-      <Sidebar
-        agents={agents} routines={routines} selId={selId} selKind={selKind}
-        onSelectAgent={selectAgent} onSelectRoutine={selectRoutine}
-        onNewAgent={() => setModal({ type: "new" })}
-        onDuplicate={duplicateAgent} onDelete={(id) => setModal({ type: "delete", id })}
-        onToggleRoutine={toggleRoutine} query={query} />
+      {/* sidebar — static on desktop, slide-in drawer on mobile */}
+      {sidebarOpen && <div className="fixed left-0 right-0 top-[54px] bottom-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      <div className={`fixed left-0 top-[54px] bottom-0 z-40 transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <Sidebar
+          agents={agents} routines={routines} selId={selId} selKind={selKind}
+          onSelectAgent={selectAgent} onSelectRoutine={selectRoutine}
+          onNewAgent={() => setModal({ type: "new" })}
+          onDuplicate={duplicateAgent} onDelete={(id) => setModal({ type: "delete", id })}
+          onToggleRoutine={toggleRoutine} query={query} />
+      </div>
 
       <main className="flex-1 flex flex-col min-w-0">
         {selKind === "agent" && agent && draft ? (
           <>
-            <header className="flex items-center gap-4 px-5 h-14 border-b shrink-0" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+            <header className="flex items-center gap-2 md:gap-4 px-3 md:px-5 h-14 border-b shrink-0" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
               <div className="flex items-center gap-2.5 min-w-0">
                 <Avatar agent={agent} size={30} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[14px] truncate" style={{ color: "var(--text)" }}>{agent.name}</span>
-                    <ModelBadge model={agent.model} />
+                    <span className="hidden sm:inline-flex"><ModelBadge model={agent.model} /></span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 ml-2 p-0.5 rounded-xl" style={{ background: "var(--surface-2)" }}>
+              <div className="flex items-center gap-1 ml-1 md:ml-2 p-0.5 rounded-xl shrink-0" style={{ background: "var(--surface-2)" }}>
                 {tabs.map((tab) => (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                    className="relative px-3.5 h-8 rounded-lg text-[13px] font-medium transition-colors"
+                    className="relative px-2.5 md:px-3.5 h-8 rounded-lg text-[13px] font-medium transition-colors"
                     style={activeTab === tab.id
                       ? { background: "var(--surface-3)", color: "var(--text)", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }
                       : { color: "var(--muted)" }}>
@@ -452,7 +462,7 @@ function App() {
               </div>
 
               <div className="flex-1" />
-              <div className="flex items-center gap-1.5">
+              <div className="hidden md:flex items-center gap-1.5">
                 <StatusDot status={agent.status} />
                 <span className="text-[12px]" style={{ color: "var(--muted)" }}>{window.STATUS[agent.status].label}</span>
               </div>
@@ -492,8 +502,14 @@ function App() {
         )}
       </main>
 
+      {/* activity panel — static on desktop, slide-in drawer on mobile */}
       {panelOpen && (
-        <RightPanel agent={agent} run={run} onClose={() => setPanelOpen(false)} onStop={stopRun} onClear={clearRun} />
+        <>
+          <div className="fixed left-0 right-0 top-[54px] bottom-0 z-30 bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
+          <div className="fixed right-0 top-[54px] bottom-0 z-40 md:static md:z-auto">
+            <RightPanel agent={agent} run={run} onClose={() => setPanelOpen(false)} onStop={stopRun} onClear={clearRun} />
+          </div>
+        </>
       )}
       </div>
 
