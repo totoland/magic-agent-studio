@@ -32,6 +32,7 @@ function Icon({ name, size = 16, className = "", strokeWidth = 1.6, style }) {
     case "moon":     return <svg {...p}><path d="M20 14.5A8 8 0 0 1 9.5 4 7 7 0 1 0 20 14.5Z"/></svg>;
     case "camera":   return <svg {...p}><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>;
     case "menu":     return <svg {...p}><path d="M4 6h16M4 12h16M4 18h16"/></svg>;
+    case "paperclip":return <svg {...p}><path d="M21 11.5l-8.5 8.5a5 5 0 0 1-7-7l8.5-8.5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3l7.8-7.8"/></svg>;
     default:         return null;
   }
 }

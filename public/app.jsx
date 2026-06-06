@@ -313,18 +313,23 @@ function App() {
   }
   function closeChatStream() { if (chatEsRef.current) { chatEsRef.current.close(); chatEsRef.current = null; } }
 
-  function sendChat(agent, text) {
+  function sendChat(agent, text, attachments) {
     closeChatStream();
     const aId = agent.id;
+    const atts = attachments || [];
     const sessionId = chatByAgent[aId] && chatByAgent[aId].sessionId;
-    const uMsg = { id: uid(), role: "user", text };
+    const uMsg = { id: uid(), role: "user", text, attachments: atts };
     const aMsg = { id: uid(), role: "assistant", text: "", events: [], streaming: true };
     setChatByAgent((m) => {
       const th = m[aId] || { sessionId: null, messages: [] };
       return { ...m, [aId]: { ...th, messages: [...th.messages, uMsg, aMsg] } };
     });
 
-    const url = `/api/chat?agentId=${encodeURIComponent(aId)}&message=${encodeURIComponent(text)}&context=off` +
+    // hand the agent the on-disk paths so it can Read them (images render via Read)
+    const sendText = atts.length
+      ? `${text}\n\n[Attached files — use your Read tool to open them:]\n${atts.map((a) => "- " + a.path).join("\n")}`.trim()
+      : text;
+    const url = `/api/chat?agentId=${encodeURIComponent(aId)}&message=${encodeURIComponent(sendText)}&context=off` +
       (sessionId ? `&session=${encodeURIComponent(sessionId)}` : "");
     const es = new EventSource(url);
     chatEsRef.current = es;
@@ -500,7 +505,7 @@ function App() {
 
             <div className="flex-1 min-h-0">
               {activeTab === "persona" && <PersonaTab agent={agent} draft={draft} setDraft={setDraft} dirty={dirty} onSave={saveDraft} onRevert={revertDraft} />}
-              {activeTab === "chat" && <ChatTab agent={agent} thread={chatThread} onSend={(t) => sendChat(agent, t)} onNewChat={() => newChat(agent.id)} />}
+              {activeTab === "chat" && <ChatTab agent={agent} thread={chatThread} onSend={(t, atts) => sendChat(agent, t, atts)} onNewChat={() => newChat(agent.id)} />}
               {activeTab === "run" && <RunTab agent={agent} task={taskByAgent[agent.id] || ""} setTask={(v) => setTaskByAgent((m) => ({ ...m, [agent.id]: v }))} running={run.status === "running" && run.agentId === agent.id} onRun={triggerRun} onStop={stopRun} onOpenPanel={() => setPanelOpen(true)} panelOpen={panelOpen} injectContext={injectContext} setInjectContext={setInjectContext} contextInfo={contextInfo} />}
               {activeTab === "activity" && <ActivityTab agent={agent} history={history} onRerun={(task) => { setActiveTab("run"); setTaskByAgent((m) => ({ ...m, [agent.id]: task })); }} />}
             </div>

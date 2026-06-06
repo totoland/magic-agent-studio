@@ -4,6 +4,8 @@
 
 import express from "express";
 import path from "node:path";
+import os from "node:os";
+import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   listAgents, getAgent, createAgent, updateAgent, deleteAgent, duplicateAgent,
@@ -20,6 +22,7 @@ const PORT = process.env.PORT || 4317;
 // raw on a LAN). Put Cloudflare Tunnel / SSH in front. Set HOST=0.0.0.0 only with
 // an auth proxy ahead of it.
 const HOST = process.env.HOST || "127.0.0.1";
+const UPLOADS_DIR = path.join(os.homedir(), ".claude", "agents", ".studio", "uploads");
 
 app.use(express.json({ limit: "12mb" })); // base64 avatars can be chunky
 
@@ -39,6 +42,21 @@ app.post("/api/agents/:id/duplicate", wrap(async (req, res) => res.json(await du
 // ── Routines ─────────────────────────────────────────────────────────────────
 app.get("/api/routines", wrap(async (_req, res) => res.json(await listRoutines())));
 app.put("/api/routines/:id", wrap(async (req, res) => res.json(await setEnabled(req.params.id, !!req.body.enabled))));
+
+// ── Upload a chat attachment (base64) → saved to disk; agents Read it by path ──
+app.post("/api/upload", wrap(async (req, res) => {
+  const { name, dataB64 } = req.body || {};
+  if (!dataB64) throw new Error("no file data");
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataB64);
+  const b64 = m ? m[2] : dataB64;
+  const mime = m ? m[1] : "";
+  await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  const safe = (name || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "file";
+  const fname = `${Date.now()}-${safe}`;
+  await fs.writeFile(path.join(UPLOADS_DIR, fname), Buffer.from(b64, "base64"));
+  const isImage = mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(name || "");
+  res.json({ name: name || fname, path: path.join(UPLOADS_DIR, fname), url: `/uploads/${encodeURIComponent(fname)}`, isImage });
+}));
 
 // ── Shared "team context" (hot-core L1) preview, for the Run-tab meter ──────────
 app.get("/api/context", wrap(async (_req, res) => {
@@ -137,6 +155,7 @@ app.get("/api/chat", async (req, res) => {
 
 // ── Static: avatars + the app ────────────────────────────────────────────────
 app.use("/avatars", express.static(AVATARS_DIR));
+app.use("/uploads", express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, "public")));
 
 app.listen(PORT, HOST, () => {

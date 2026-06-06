@@ -38,6 +38,9 @@ function ChatTrace({ events, streaming }) {
 
 function ChatTab({ agent, thread, onSend, onNewChat }) {
   const [input, setInput] = React.useState("");
+  const [attachments, setAttachments] = React.useState([]);
+  const [uploading, setUploading] = React.useState(false);
+  const fileRef = React.useRef(null);
   const scrollRef = React.useRef(null);
   const msgs = (thread && thread.messages) || [];
   const last = msgs[msgs.length - 1];
@@ -48,7 +51,28 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [msgs.length, streaming, last && last.text]);
 
-  const send = () => { const t = input.trim(); if (!t || streaming) return; onSend(t); setInput(""); };
+  async function addFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setUploading(true);
+    for (const f of files) {
+      try {
+        const dataB64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        const resp = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: f.name, dataB64 }) });
+        if (resp.ok) { const data = await resp.json(); setAttachments((a) => [...a, data]); }
+      } catch {}
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+  const removeAttachment = (i) => setAttachments((a) => a.filter((_, idx) => idx !== i));
+
+  const send = () => {
+    const t = input.trim();
+    if ((!t && !attachments.length) || streaming || uploading) return;
+    onSend(t, attachments);
+    setInput(""); setAttachments([]);
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -97,8 +121,19 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
           )}
           {msgs.map((m) => m.role === "user" ? (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-br-md px-3.5 py-2 text-[13px] whitespace-pre-wrap"
-                style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--text)" }}>{m.text}</div>
+              <div className="max-w-[80%] flex flex-col items-end gap-1.5">
+                {m.attachments && m.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    {m.attachments.map((at, i) => at.isImage
+                      ? <img key={i} src={at.url} alt={at.name} className="rounded-lg border" style={{ maxWidth: 150, maxHeight: 150, borderColor: "var(--border)" }} />
+                      : <span key={i} className="flex items-center gap-1.5 text-[11.5px] rounded-lg border px-2 py-1" style={{ borderColor: "var(--border)", background: "var(--surface-2)", color: "var(--muted)" }}><Icon name="doc" size={12} /> {at.name}</span>)}
+                  </div>
+                )}
+                {m.text && (
+                  <div className="rounded-2xl rounded-br-md px-3.5 py-2 text-[13px] whitespace-pre-wrap"
+                    style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--text)" }}>{m.text}</div>
+                )}
+              </div>
             </div>
           ) : (
             <div key={m.id} className="flex gap-2.5">
@@ -136,15 +171,35 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
 
       {/* composer */}
       <div className="px-7 py-3 border-t shrink-0" style={{ borderColor: "var(--border)" }}>
-        <div className="max-w-[760px] mx-auto rounded-2xl border p-2.5 flex items-end gap-2" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} disabled={streaming}
-            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
-            placeholder={`Message ${agent.name}…`} rows={1}
-            className="flex-1 resize-none outline-none bg-transparent px-2 py-1.5 text-[14px] scroll-thin"
-            style={{ color: "var(--text)", maxHeight: 140 }} />
-          <Btn variant="primary" size="md" onClick={send} disabled={!input.trim() || streaming}><Icon name="play" size={13} /> Send</Btn>
+        <div className="max-w-[760px] mx-auto rounded-2xl border p-2.5" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+          onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
+          {(attachments.length > 0 || uploading) && (
+            <div className="flex flex-wrap gap-1.5 px-1 pb-2">
+              {attachments.map((at, i) => (
+                <span key={i} className="flex items-center gap-1.5 text-[11.5px] rounded-lg border pl-1.5 pr-1 py-1" style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--muted)" }}>
+                  {at.isImage ? <img src={at.url} alt="" className="w-5 h-5 rounded object-cover" /> : <Icon name="doc" size={13} />}
+                  <span className="max-w-[140px] truncate">{at.name}</span>
+                  <button onClick={() => removeAttachment(i)} className="grid place-items-center w-4 h-4 rounded opacity-50 hover:opacity-100"><Icon name="x" size={11} /></button>
+                </span>
+              ))}
+              {uploading && <span className="text-[11.5px] flex items-center gap-1.5" style={{ color: "var(--faint)" }}><span className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} /> uploading…</span>}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <button onClick={() => fileRef.current && fileRef.current.click()} disabled={streaming} title="Attach files or images"
+              className="grid place-items-center w-9 h-9 rounded-lg shrink-0 transition-colors hover:bg-[var(--hover)] disabled:opacity-40" style={{ color: "var(--muted)" }}>
+              <Icon name="paperclip" size={17} />
+            </button>
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} disabled={streaming}
+              onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
+              placeholder={`Message ${agent.name}…`} rows={1}
+              className="flex-1 resize-none outline-none bg-transparent px-2 py-1.5 text-[14px] scroll-thin"
+              style={{ color: "var(--text)", maxHeight: 140 }} />
+            <Btn variant="primary" size="md" onClick={send} disabled={(!input.trim() && !attachments.length) || streaming || uploading}><Icon name="play" size={13} /> Send</Btn>
+          </div>
         </div>
-        <div className="max-w-[760px] mx-auto text-[11px] font-mono pt-1.5 pl-2" style={{ color: "var(--faint)" }}>⌘↵ to send · remembers within this chat</div>
+        <div className="max-w-[760px] mx-auto text-[11px] font-mono pt-1.5 pl-2" style={{ color: "var(--faint)" }}>⌘↵ to send · 📎 attach files/images · remembers within this chat</div>
       </div>
     </div>
   );
