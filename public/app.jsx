@@ -121,6 +121,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer; on desktop the sidebar is always shown
   const [view, setView] = useState("studio");       // "studio" (workspace) | "office" (virtual office)
   const [officeAgentId, setOfficeAgentId] = useState(null); // agent opened from the office overlay
+  const [testStateById, setTestStateById] = useState({});   // office: manual state override per agent (right-click test)
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem("studio.theme") || "dark"; } catch { return "dark"; } });
 
   const [drafts, setDrafts] = useState({});
@@ -440,6 +441,23 @@ function App() {
   if (run.status === "running" && run.agentId) busyIds.add(run.agentId);
   for (const id in chatByAgent) { const ms = chatByAgent[id] && chatByAgent[id].messages; const l = ms && ms[ms.length - 1]; if (l && l.role === "assistant" && l.streaming) busyIds.add(id); }
   const errorIds = new Set(agents.filter((a) => a.status === "error").map((a) => a.id));
+  // live sprite state per agent (idle / work / thinking / talking) from run + chat streams
+  const statesById = {};
+  for (const a of agents) {
+    let st = "idle";
+    if (run.status === "running" && run.agentId === a.id) {
+      const le = run.events[run.events.length - 1];
+      st = le && le.kind === "thinking" ? "thinking" : "work";
+    } else {
+      const ms = chatByAgent[a.id] && chatByAgent[a.id].messages;
+      const lm = ms && ms[ms.length - 1];
+      if (lm && lm.role === "assistant" && lm.streaming) {
+        const evs = lm.events || []; const le = evs[evs.length - 1];
+        st = le && le.kind === "tool" ? "work" : le && le.kind === "thinking" ? "thinking" : lm.text ? "talking" : "thinking";
+      }
+    }
+    statesById[a.id] = st;
+  }
 
   if (loading) {
     return (
@@ -565,10 +583,11 @@ function App() {
       {/* Virtual Office view */}
       {view === "office" && (
         <div className="flex-1 min-h-0">
-          <OfficeView agents={agents} busyIds={busyIds} errorIds={errorIds}
-            runningCount={busyIds.size}
+          <OfficeView agents={agents} statesById={statesById} testStateById={testStateById}
+            busyIds={busyIds} errorIds={errorIds} runningCount={busyIds.size}
             onRecruit={() => setModal({ type: "new" })}
-            onOpenAgent={(id) => setOfficeAgentId(id)} />
+            onOpenAgent={(id) => setOfficeAgentId(id)}
+            onSetTest={(id, s) => setTestStateById((m) => ({ ...m, [id]: s }))} />
         </div>
       )}
 
