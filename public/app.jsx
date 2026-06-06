@@ -122,6 +122,8 @@ function App() {
   const [view, setView] = useState("studio");       // "studio" (workspace) | "office" (virtual office)
   const [officeAgentId, setOfficeAgentId] = useState(null); // agent opened from the office overlay
   const [testStateById, setTestStateById] = useState({});   // office: manual state override per agent (right-click test)
+  const [transientById, setTransientById] = useState({});   // office: timed greet/celebrate
+  const transientTimers = useRef({});
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem("studio.theme") || "dark"; } catch { return "dark"; } });
 
   const [drafts, setDrafts] = useState({});
@@ -253,7 +255,7 @@ function App() {
       setAgentStatus(targetAgent.id, status === "error" ? "error" : "idle");
       // clear the task composer once a run completes successfully (the task is
       // preserved in the run timeline + Activity history); keep it on error/stop for retry
-      if (status === "completed") setTaskByAgent((m) => ({ ...m, [targetAgent.id]: "" }));
+      if (status === "completed") { setTaskByAgent((m) => ({ ...m, [targetAgent.id]: "" })); setTransient(targetAgent.id, "celebrate", 2200); }
       setRun((r) => {
         const steps = r.events.filter((e) => e.kind === "tool" || e.kind === "result").length;
         const entry = { id: uid(), task: taskText || `Run ${targetAgent.name}`, status: status === "completed" ? "completed" : "error",
@@ -365,6 +367,7 @@ function App() {
           closeChatStream();
           patchLastAssistant(aId, (a) => ({ ...a, streaming: false, tokens: ev.tokens || a.tokens, cached: ev.cached ?? a.cached,
             text: a.text || a.events.filter((x) => x.kind === "thinking").map((x) => x.text).join("\n\n") || "(no response)" }));
+          if (ev.status === "completed") setTransient(aId, "celebrate", 2200);
           break;
       }
     };
@@ -376,6 +379,13 @@ function App() {
   function newChat(agentId) {
     closeChatStream();
     setChatByAgent((m) => ({ ...m, [agentId]: { sessionId: null, messages: [] } }));
+  }
+
+  // office: play a timed transient state (greet/celebrate), then auto-clear
+  function setTransient(id, state, ms) {
+    setTransientById((m) => ({ ...m, [id]: state }));
+    if (transientTimers.current[id]) clearTimeout(transientTimers.current[id]);
+    transientTimers.current[id] = setTimeout(() => setTransientById((m) => { const n = { ...m }; delete n[id]; return n; }), ms);
   }
 
   // ── create / clone / delete (real API) ──
@@ -583,10 +593,10 @@ function App() {
       {/* Virtual Office view */}
       {view === "office" && (
         <div className="flex-1 min-h-0">
-          <OfficeView agents={agents} statesById={statesById} testStateById={testStateById}
+          <OfficeView agents={agents} statesById={statesById} testStateById={testStateById} transientById={transientById}
             busyIds={busyIds} errorIds={errorIds} runningCount={busyIds.size}
             onRecruit={() => setModal({ type: "new" })}
-            onOpenAgent={(id) => setOfficeAgentId(id)}
+            onOpenAgent={(id) => { setTransient(id, "greet", 1600); setOfficeAgentId(id); }}
             onSetTest={(id, s) => setTestStateById((m) => ({ ...m, [id]: s }))} />
         </div>
       )}

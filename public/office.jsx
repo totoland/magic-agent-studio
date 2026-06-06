@@ -13,7 +13,7 @@ function pickFrames(sprite, state) {
 }
 
 // ping-pong animated sprite (1 frame = static)
-function SpriteAnim({ frames, error, height }) {
+function SpriteAnim({ frames, error, height, anim }) {
   const [i, setI] = React.useState(0);
   const key = frames.join("|");
   React.useEffect(() => {
@@ -27,7 +27,8 @@ function SpriteAnim({ frames, error, height }) {
     }, 460);
     return () => clearInterval(t);
   }, [key]);
-  return <img src={frames[i]} draggable={false} style={{ height, filter: error ? "drop-shadow(0 0 5px var(--error))" : "none" }} />;
+  const cls = anim === "work" ? "sprite-work" : anim === "celebrate" ? "sprite-celebrate" : anim === "idle" ? "sprite-idle" : "";
+  return <img className={cls} src={frames[i]} draggable={false} style={{ height, filter: error ? "drop-shadow(0 0 5px var(--error))" : "none" }} />;
 }
 
 function OfficeAgent({ agent, xPct, yPct, height, state, busy, error, testing, onOpen, onSetTest }) {
@@ -47,7 +48,7 @@ function OfficeAgent({ agent, xPct, yPct, height, state, busy, error, testing, o
           : busy && <div className="mb-1 px-2 py-1 rounded-lg text-[10px] font-mono whitespace-nowrap shadow-lg" style={{ background: "rgba(8,6,5,.82)", color: "var(--running)", border: "1px solid color-mix(in srgb, var(--running) 45%, transparent)" }}>● {state === "thinking" ? "thinking…" : "working…"}</div>}
         {/* character */}
         <div className="relative transition-transform duration-150 group-hover:-translate-y-1">
-          {frames ? <SpriteAnim frames={frames} error={error} height={height} /> : <Avatar agent={agent} size={96} />}
+          {frames ? <SpriteAnim frames={frames} error={error} height={height} anim={state} /> : <Avatar agent={agent} size={96} />}
           {busy && <span className="absolute -inset-1 rounded-2xl animate-ping-soft" style={{ background: "var(--running)", opacity: .22 }} />}
         </div>
         <span className="rounded-full" style={{ width: "62%", height: 10, background: "rgba(0,0,0,.5)", filter: "blur(3px)", marginTop: 2 }} />
@@ -80,7 +81,7 @@ function OfficeAgent({ agent, xPct, yPct, height, state, busy, error, testing, o
   );
 }
 
-function OfficeView({ agents, statesById, testStateById, busyIds, errorIds, onOpenAgent, onSetTest, onRecruit, runningCount }) {
+function OfficeView({ agents, statesById, testStateById, transientById, busyIds, errorIds, onOpenAgent, onSetTest, onRecruit, runningCount }) {
   // Scatter on the floor with depth: alternate front/back bands (zig-zag, not a
   // straight line); front = lower + bigger, back = higher + smaller (45° perspective).
   const place = (i) => {
@@ -102,7 +103,7 @@ function OfficeView({ agents, statesById, testStateById, busyIds, errorIds, onOp
         {agents.map((a, i) => {
           const { x, y, h } = place(i);
           const ts = testStateById[a.id];
-          const st = ts || statesById[a.id] || "idle";
+          const st = ts || (transientById && transientById[a.id]) || statesById[a.id] || "idle"; // test > transient > live
           return <OfficeAgent key={a.id} agent={a} xPct={x} yPct={y} height={h} state={st} testing={!!ts}
             busy={busyIds.has(a.id)} error={errorIds.has(a.id)} onOpen={onOpenAgent} onSetTest={onSetTest} />;
         })}
