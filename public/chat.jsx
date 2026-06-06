@@ -63,11 +63,23 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
             {sessionTokens > 0 && <span className="font-mono"> · {fmtTok(sessionTokens)} tok</span>}
           </span>
         </div>
-        <button onClick={onNewChat} disabled={streaming}
-          className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-lg border transition-colors hover:bg-[var(--hover)] disabled:opacity-40"
-          style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
-          <Icon name="plus" size={13} /> New chat
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button onClick={onNewChat} disabled={streaming}
+            className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-lg border transition-colors hover:bg-[var(--hover)] disabled:opacity-40"
+            style={{ borderColor: "var(--border)", color: "var(--muted)" }}>
+            <Icon name="plus" size={13} /> New chat
+          </button>
+          {(msgs.length > 0 || (thread && thread.sessionId)) && (
+            <button onClick={onNewChat}
+              title={streaming ? "Stop and close this session" : "Close & clear this session"}
+              className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-lg border transition-colors"
+              style={{ borderColor: "color-mix(in srgb, var(--error) 30%, var(--border))", color: "var(--error)", background: "transparent" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "color-mix(in srgb, var(--error) 12%, transparent)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <Icon name="x" size={13} /> {streaming ? "Stop & close" : "Close"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* messages */}

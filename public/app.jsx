@@ -26,6 +26,7 @@ function loadChats() {
     return data;
   } catch { return {}; }
 }
+function loadTweaks() { try { return JSON.parse(localStorage.getItem("studio.tweaks") || "{}"); } catch { return {}; } }
 
 // ── tiny API client ──────────────────────────────────────────────────────────
 const api = {
@@ -98,7 +99,7 @@ function sameDraft(d, a) {
 }
 
 function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [t, setTweak] = useTweaks({ ...TWEAK_DEFAULTS, ...loadTweaks() }); // restore saved tweaks
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -107,10 +108,10 @@ function App() {
   const [selKind, setSelKind] = useState("agent");
   const [selId, setSelId] = useState(null);
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("persona");
+  const [activeTab, setActiveTab] = useState("chat"); // land on Chat by default
   const [panelOpen, setPanelOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true)); // closed by default on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer; on desktop the sidebar is always shown
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState(() => { try { return localStorage.getItem("studio.theme") || "dark"; } catch { return "dark"; } });
 
   const [drafts, setDrafts] = useState({});
   const [taskByAgent, setTaskByAgent] = useState({});
@@ -157,6 +158,9 @@ function App() {
   useEffect(() => {
     try { localStorage.setItem("studio.chats", JSON.stringify(chatByAgent)); } catch {}
   }, [chatByAgent]);
+  // persist theme + tweaks so they survive a refresh
+  useEffect(() => { try { localStorage.setItem("studio.theme", theme); } catch {} }, [theme]);
+  useEffect(() => { try { localStorage.setItem("studio.tweaks", JSON.stringify(t)); } catch {} }, [t]);
 
   function flash(kind, msg) { setToast({ kind, msg }); setTimeout(() => setToast(null), 2600); }
 
@@ -489,7 +493,7 @@ function App() {
                 <StatusDot status={agent.status} />
                 <span className="text-[12px]" style={{ color: "var(--muted)" }}>{window.STATUS[agent.status].label}</span>
               </div>
-              {!panelOpen && activeTab !== "chat" && (
+              {!panelOpen && activeTab === "run" && (
                 <button onClick={() => setPanelOpen(true)} className="grid place-items-center w-8 h-8 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover2)] transition" title="Show activity panel"><Icon name="panel" size={16} /></button>
               )}
             </header>
@@ -525,8 +529,8 @@ function App() {
         )}
       </main>
 
-      {/* activity panel — static on desktop, slide-in drawer on mobile. Hidden on Chat (activity is inline there). */}
-      {panelOpen && activeTab !== "chat" && (
+      {/* activity panel — only on the Run tab (static on desktop, slide-in drawer on mobile) */}
+      {panelOpen && activeTab === "run" && (
         <>
           <div className="fixed left-0 right-0 top-[54px] bottom-0 z-30 bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
           <div className="fixed right-0 top-[54px] bottom-0 z-40 md:static md:z-auto">
