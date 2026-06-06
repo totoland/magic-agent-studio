@@ -66,6 +66,13 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
     if (fileRef.current) fileRef.current.value = "";
   }
   const removeAttachment = (i) => setAttachments((a) => a.filter((_, idx) => idx !== i));
+  function onPaste(e) {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const files = [];
+    for (const it of items) { if (it.kind === "file") { const f = it.getAsFile(); if (f) files.push(f); } }
+    if (files.length) { e.preventDefault(); addFiles(files); } // paste an image/file straight in
+  }
 
   const send = () => {
     const t = input.trim();
@@ -193,6 +200,7 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
             <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
             <textarea value={input} onChange={(e) => setInput(e.target.value)} disabled={streaming}
               onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
+              onPaste={onPaste}
               placeholder={`Message ${agent.name}…`} rows={1}
               className="flex-1 resize-none outline-none bg-transparent px-2 py-1.5 text-[14px] scroll-thin"
               style={{ color: "var(--text)", maxHeight: 140 }} />

@@ -2,7 +2,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 const {
   Icon, Btn, Avatar, StatusDot, ModelBadge,
-  Sidebar, PersonaTab, RunTab, ChatTab, RightPanel, ActivityTab,
+  Sidebar, PersonaTab, RunTab, ChatTab, RightPanel, ActivityTab, OfficeView,
   NewAgentModal, ConfirmDialog, RoutineDetail,
   useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSelect,
 } = window;
@@ -45,7 +45,7 @@ const ACCENTS = {
   amber:  { accent: "#f59e0b", fgDark: "#fcd34d", fgLight: "#b45309" },
 };
 
-function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, onMenu, totalTokens }) {
+function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, onMenu, totalTokens, view, onView }) {
   return (
     <header className="flex items-center gap-2 md:gap-4 px-2.5 md:px-4 border-b shrink-0" style={{ height: 54, borderColor: "var(--border)", background: "var(--surface-1)" }}>
       <button onClick={onMenu} aria-label="Menu" className="md:hidden grid place-items-center w-9 h-9 rounded-lg shrink-0 hover:bg-[var(--hover2)] transition" style={{ color: "var(--muted)" }}>
@@ -68,6 +68,14 @@ function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, on
             className="bg-transparent outline-none text-[13px] w-full placeholder:text-[var(--faint)]" style={{ color: "var(--text)" }} />
           <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded border" style={{ borderColor: "var(--border)", color: "var(--faint)" }}>⌘K</kbd>
         </div>
+      </div>
+
+      <div className="flex items-center p-0.5 rounded-lg border shrink-0 mr-1" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+        {[["studio", "Studio"], ["office", "Office"]].map(([v, label]) => (
+          <button key={v} onClick={() => onView(v)}
+            className="px-2.5 h-7 rounded-md text-[12px] font-medium transition-colors"
+            style={view === v ? { background: "var(--surface-3)", color: "var(--accent-fg)" } : { color: "var(--muted)" }}>{label}</button>
+        ))}
       </div>
 
       <div className="flex items-center p-0.5 rounded-lg border shrink-0" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
@@ -111,6 +119,8 @@ function App() {
   const [activeTab, setActiveTab] = useState("chat"); // land on Chat by default
   const [panelOpen, setPanelOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true)); // closed by default on mobile
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer; on desktop the sidebar is always shown
+  const [view, setView] = useState("studio");       // "studio" (workspace) | "office" (virtual office)
+  const [officeAgentId, setOfficeAgentId] = useState(null); // agent opened from the office overlay
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem("studio.theme") || "dark"; } catch { return "dark"; } });
 
   const [drafts, setDrafts] = useState({});
@@ -425,6 +435,11 @@ function App() {
   const chatThread = agent ? chatByAgent[agent.id] : null;
   const chatStreaming = (() => { const l = chatThread && chatThread.messages[chatThread.messages.length - 1]; return !!(l && l.role === "assistant" && l.streaming); })();
   const totalChatTokens = Object.values(chatByAgent).reduce((s, th) => s + (((th && th.messages) || []).reduce((a, m) => a + (m.tokens || 0), 0)), 0);
+  // who's "busy" (for the office): a live run, or a chat turn still streaming
+  const busyIds = new Set();
+  if (run.status === "running" && run.agentId) busyIds.add(run.agentId);
+  for (const id in chatByAgent) { const ms = chatByAgent[id] && chatByAgent[id].messages; const l = ms && ms[ms.length - 1]; if (l && l.role === "assistant" && l.streaming) busyIds.add(id); }
+  const errorIds = new Set(agents.filter((a) => a.status === "error").map((a) => a.id));
 
   if (loading) {
     return (
@@ -452,8 +467,9 @@ function App() {
     <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--ui)" }}>
       <TopBar query={query} setQuery={setQuery} theme={theme} onToggleTheme={toggleTheme}
         agentCount={agents.length} running={agents.filter((a) => a.status === "running").length}
-        onMenu={() => setSidebarOpen((o) => !o)} totalTokens={totalChatTokens} />
+        onMenu={() => setSidebarOpen((o) => !o)} totalTokens={totalChatTokens} view={view} onView={setView} />
 
+      {view === "studio" && (
       <div className="flex-1 flex min-h-0">
       {/* sidebar — static on desktop, slide-in drawer on mobile */}
       {sidebarOpen && <div className="fixed left-0 right-0 top-[54px] bottom-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
@@ -544,6 +560,37 @@ function App() {
         </>
       )}
       </div>
+      )}
+
+      {/* Virtual Office view */}
+      {view === "office" && (
+        <div className="flex-1 min-h-0">
+          <OfficeView agents={agents} busyIds={busyIds} errorIds={errorIds}
+            runningCount={busyIds.size}
+            onRecruit={() => setModal({ type: "new" })}
+            onOpenAgent={(id) => setOfficeAgentId(id)} />
+        </div>
+      )}
+
+      {/* Office → agent chat overlay (drawer) */}
+      {view === "office" && officeAgentId && (() => {
+        const oa = agents.find((a) => a.id === officeAgentId);
+        if (!oa) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setOfficeAgentId(null)} />
+            <div className="fixed right-0 top-[54px] bottom-0 z-50 w-full max-w-[480px] flex flex-col border-l shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+              <div className="flex items-center justify-between px-4 h-12 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+                <div className="flex items-center gap-2 min-w-0"><Avatar agent={oa} size={24} /><span className="font-mono text-[13px] truncate" style={{ color: "var(--text)" }}>{oa.name}</span><ModelBadge model={oa.model} /></div>
+                <button onClick={() => setOfficeAgentId(null)} className="grid place-items-center w-8 h-8 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover2)] transition"><Icon name="x" size={16} /></button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <ChatTab agent={oa} thread={chatByAgent[oa.id]} onSend={(t, atts) => sendChat(oa, t, atts)} onNewChat={() => newChat(oa.id)} />
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* modals */}
       {modal?.type === "new" && <NewAgentModal onClose={() => setModal(null)} onCreate={createAgent} />}
