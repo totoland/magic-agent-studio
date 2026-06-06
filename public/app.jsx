@@ -11,6 +11,21 @@ const D = window.STUDIO_DATA;
 let _uid = 0;
 const uid = () => `e${++_uid}`;
 const nowTs = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
+const fmtTok = (n) => (!n ? "0" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+
+// chat threads persist across refreshes (localStorage); a turn left mid-stream by
+// a refresh is finalized on load.
+function loadChats() {
+  try {
+    const data = JSON.parse(localStorage.getItem("studio.chats") || "{}");
+    for (const id in data) {
+      const th = data[id];
+      if (th && th.messages) th.messages = th.messages.map((m) =>
+        m.streaming ? { ...m, streaming: false, text: m.text || "(interrupted by refresh)" } : m);
+    }
+    return data;
+  } catch { return {}; }
+}
 
 // ── tiny API client ──────────────────────────────────────────────────────────
 const api = {
@@ -29,7 +44,7 @@ const ACCENTS = {
   amber:  { accent: "#f59e0b", fgDark: "#fcd34d", fgLight: "#b45309" },
 };
 
-function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, onMenu }) {
+function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, onMenu, totalTokens }) {
   return (
     <header className="flex items-center gap-2 md:gap-4 px-2.5 md:px-4 border-b shrink-0" style={{ height: 54, borderColor: "var(--border)", background: "var(--surface-1)" }}>
       <button onClick={onMenu} aria-label="Menu" className="md:hidden grid place-items-center w-9 h-9 rounded-lg shrink-0 hover:bg-[var(--hover2)] transition" style={{ color: "var(--muted)" }}>
@@ -41,7 +56,7 @@ function TopBar({ query, setQuery, theme, onToggleTheme, agentCount, running, on
         </span>
         <div className="leading-tight">
           <div className="text-[14px] font-semibold tracking-tight" style={{ color: "var(--text)" }}>Totoland&nbsp;Agent&nbsp;Studio</div>
-          <div className="text-[10.5px] font-mono" style={{ color: "var(--muted)" }}>{agentCount} agents · {running} running</div>
+          <div className="text-[10.5px] font-mono" style={{ color: "var(--muted)" }}>{agentCount} agents · {running} running{totalTokens ? ` · ${fmtTok(totalTokens)} tok` : ""}</div>
         </div>
       </div>
 
@@ -101,7 +116,7 @@ function App() {
   const [taskByAgent, setTaskByAgent] = useState({});
   const [historyByAgent, setHistoryByAgent] = useState({});
   const [injectContext, setInjectContext] = useState(false); // OFF by default: team-context already auto-loads via ~/.claude/CLAUDE.md. This is an optional re-inject/emphasis override.
-  const [chatByAgent, setChatByAgent] = useState({}); // { [agentId]: { sessionId, messages:[{id,role,text,events,streaming}] } }
+  const [chatByAgent, setChatByAgent] = useState(loadChats); // { [agentId]: { sessionId, messages:[...] } } — persisted
   const [contextInfo, setContextInfo] = useState(null);      // {available, tokensEstimate} from /api/context
 
   const [run, setRun] = useState({ status: "idle", events: [], tokens: 0, cached: 0, contextTokens: 0, elapsed: 0, target: null, agentId: null, task: "" });
@@ -137,6 +152,11 @@ function App() {
       }
     })();
   }, []);
+
+  // persist chat threads so a refresh keeps the conversation until cleared
+  useEffect(() => {
+    try { localStorage.setItem("studio.chats", JSON.stringify(chatByAgent)); } catch {}
+  }, [chatByAgent]);
 
   function flash(kind, msg) { setToast({ kind, msg }); setTimeout(() => setToast(null), 2600); }
 
@@ -315,13 +335,15 @@ function App() {
           patchLastAssistant(aId, (a) => ({ ...a, events: [...a.events, { kind: "tool", id: ev.id, icon: ev.icon, label: ev.label, arg: ev.arg, state: "pending" }] })); break;
         case "tool_update":
           patchLastAssistant(aId, (a) => ({ ...a, events: a.events.map((x) => (x.id === ev.id ? { ...x, state: ev.state, result: ev.result } : x)) })); break;
+        case "tokens":
+          patchLastAssistant(aId, (a) => ({ ...a, tokens: ev.tokens || a.tokens, cached: ev.cached ?? a.cached })); break;
         case "result":
-          patchLastAssistant(aId, (a) => ({ ...a, text: ev.text })); break;
+          patchLastAssistant(aId, (a) => ({ ...a, text: ev.text, tokens: ev.tokens || a.tokens })); break;
         case "error":
           patchLastAssistant(aId, (a) => ({ ...a, text: (a.text ? a.text + "\n\n" : "") + "⚠️ **Error** — " + ev.text })); break;
         case "done":
           closeChatStream();
-          patchLastAssistant(aId, (a) => ({ ...a, streaming: false,
+          patchLastAssistant(aId, (a) => ({ ...a, streaming: false, tokens: ev.tokens || a.tokens, cached: ev.cached ?? a.cached,
             text: a.text || a.events.filter((x) => x.kind === "thinking").map((x) => x.text).join("\n\n") || "(no response)" }));
           break;
       }
@@ -393,6 +415,7 @@ function App() {
   const history = agent ? (historyByAgent[agent.id] || []) : [];
   const chatThread = agent ? chatByAgent[agent.id] : null;
   const chatStreaming = (() => { const l = chatThread && chatThread.messages[chatThread.messages.length - 1]; return !!(l && l.role === "assistant" && l.streaming); })();
+  const totalChatTokens = Object.values(chatByAgent).reduce((s, th) => s + (((th && th.messages) || []).reduce((a, m) => a + (m.tokens || 0), 0)), 0);
 
   if (loading) {
     return (
@@ -420,7 +443,7 @@ function App() {
     <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ background: "var(--bg)", color: "var(--text)", fontFamily: "var(--ui)" }}>
       <TopBar query={query} setQuery={setQuery} theme={theme} onToggleTheme={toggleTheme}
         agentCount={agents.length} running={agents.filter((a) => a.status === "running").length}
-        onMenu={() => setSidebarOpen((o) => !o)} />
+        onMenu={() => setSidebarOpen((o) => !o)} totalTokens={totalChatTokens} />
 
       <div className="flex-1 flex min-h-0">
       {/* sidebar — static on desktop, slide-in drawer on mobile */}
@@ -466,7 +489,7 @@ function App() {
                 <StatusDot status={agent.status} />
                 <span className="text-[12px]" style={{ color: "var(--muted)" }}>{window.STATUS[agent.status].label}</span>
               </div>
-              {!panelOpen && (
+              {!panelOpen && activeTab !== "chat" && (
                 <button onClick={() => setPanelOpen(true)} className="grid place-items-center w-8 h-8 rounded-lg text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover2)] transition" title="Show activity panel"><Icon name="panel" size={16} /></button>
               )}
             </header>
@@ -502,8 +525,8 @@ function App() {
         )}
       </main>
 
-      {/* activity panel — static on desktop, slide-in drawer on mobile */}
-      {panelOpen && (
+      {/* activity panel — static on desktop, slide-in drawer on mobile. Hidden on Chat (activity is inline there). */}
+      {panelOpen && activeTab !== "chat" && (
         <>
           <div className="fixed left-0 right-0 top-[54px] bottom-0 z-30 bg-black/40 md:hidden" onClick={() => setPanelOpen(false)} />
           <div className="fixed right-0 top-[54px] bottom-0 z-40 md:static md:z-auto">

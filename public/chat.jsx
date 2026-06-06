@@ -1,10 +1,13 @@
 // chat.jsx — multi-turn Chat tab. State (thread + sessionId) lives in app.jsx;
 // this renders the conversation and the composer. Continuity is via --resume.
 const { Icon, Btn, Avatar, mdToHtml } = window;
+const fmtTok = (n) => (!n ? "0" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 
-// collapsible tool/thinking trace under an assistant message
-function ChatTrace({ events }) {
-  const [open, setOpen] = React.useState(false);
+// Live tool/thinking trace under an assistant message. Auto-expands while the turn
+// is streaming (so you see activity live), collapses once it's done.
+function ChatTrace({ events, streaming }) {
+  const [open, setOpen] = React.useState(!!streaming);
+  React.useEffect(() => { setOpen(!!streaming); }, [streaming]);
   const tools = (events || []).filter((e) => e.kind === "tool");
   if (!events || !events.length) return null;
   return (
@@ -39,6 +42,7 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
   const msgs = (thread && thread.messages) || [];
   const last = msgs[msgs.length - 1];
   const streaming = !!(last && last.role === "assistant" && last.streaming);
+  const sessionTokens = msgs.reduce((a, m) => a + (m.tokens || 0), 0);
 
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -50,11 +54,14 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
     <div className="h-full flex flex-col">
       {/* header */}
       <div className="flex items-center justify-between px-7 py-2.5 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
-        <div className="flex items-center gap-2 text-[12px]" style={{ color: "var(--muted)" }}>
+        <div className="flex items-center gap-2 text-[12px] min-w-0" style={{ color: "var(--muted)" }}>
           <Icon name="bolt" size={13} />
-          {thread && thread.sessionId
-            ? <>Session active · <span className="font-mono">{thread.sessionId.slice(0, 8)}</span></>
-            : "New conversation"}
+          <span className="truncate">
+            {thread && thread.sessionId
+              ? <>Session · <span className="font-mono">{thread.sessionId.slice(0, 8)}</span></>
+              : "New conversation"}
+            {sessionTokens > 0 && <span className="font-mono"> · {fmtTok(sessionTokens)} tok</span>}
+          </span>
         </div>
         <button onClick={onNewChat} disabled={streaming}
           className="flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-lg border transition-colors hover:bg-[var(--hover)] disabled:opacity-40"
@@ -97,9 +104,18 @@ function ChatTab({ agent, thread, onSend, onNewChat }) {
                           </span>working…
                         </div>
                       : <span style={{ color: "var(--faint)" }}>—</span>}
-                  <ChatTrace events={m.events} />
+                  <ChatTrace events={m.events} streaming={m.streaming} />
                 </div>
-                {m.text && !m.streaming && <div className="mt-1"><window.CopyBtn text={m.text} /></div>}
+                {m.text && !m.streaming && (
+                  <div className="mt-1 flex items-center gap-2">
+                    <window.CopyBtn text={m.text} />
+                    {m.tokens ? (
+                      <span className="text-[10.5px] font-mono" style={{ color: "var(--faint)" }}>
+                        {fmtTok(m.tokens)} tok{m.cached ? ` · ⚡${fmtTok(m.cached)} cached` : ""}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
           ))}
