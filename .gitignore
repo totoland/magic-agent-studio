@@ -1,2 +1,5 @@
 node_modules/
 *.log
+
+# third-party / copyrighted character sprites — keep local, don't publish
+public/assets/sprites/doraemaon/

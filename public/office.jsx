@@ -52,7 +52,6 @@ function OfficeAgent({ agent, xPct, yPct, height, state, busy, error, testing, o
           {frames ? <SpriteAnim frames={frames} error={error} height={height} anim={state} /> : <Avatar agent={agent} size={96} />}
           {busy && <span className="absolute -inset-1 rounded-2xl animate-ping-soft" style={{ background: "var(--running)", opacity: .22 }} />}
         </div>
-        <span className="rounded-full" style={{ width: "62%", height: 10, background: "rgba(0,0,0,.5)", filter: "blur(3px)", marginTop: 2 }} />
         <span className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-mono shadow"
           style={{ background: "rgba(8,6,5,.7)", color: "#ece7e1", border: `1px solid ${error ? "var(--error)" : "rgba(255,255,255,.14)"}` }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: busy ? "var(--running)" : error ? "var(--error)" : "var(--success)" }} />
