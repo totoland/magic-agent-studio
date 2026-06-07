@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   listAgents, getAgent, createAgent, updateAgent, deleteAgent, duplicateAgent,
-  AVATARS_DIR,
+  addSpriteFrame, clearSpriteState, AVATARS_DIR,
 } from "./lib/agents.js";
 import { runAgent } from "./lib/runner.js";
 import { listRoutines, setEnabled } from "./lib/routines.js";
@@ -38,6 +38,8 @@ app.post("/api/agents", wrap(async (req, res) => res.json(await createAgent(req.
 app.put("/api/agents/:id", wrap(async (req, res) => res.json(await updateAgent(req.params.id, req.body))));
 app.delete("/api/agents/:id", wrap(async (req, res) => res.json(await deleteAgent(req.params.id))));
 app.post("/api/agents/:id/duplicate", wrap(async (req, res) => res.json(await duplicateAgent(req.params.id))));
+app.post("/api/agents/:id/sprite", wrap(async (req, res) => res.json(await addSpriteFrame(req.params.id, req.body.state, req.body.dataB64))));
+app.delete("/api/agents/:id/sprite", wrap(async (req, res) => res.json(await clearSpriteState(req.params.id, req.query.state))));
 
 // ── Routines ─────────────────────────────────────────────────────────────────
 app.get("/api/routines", wrap(async (_req, res) => res.json(await listRoutines())));

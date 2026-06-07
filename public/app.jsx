@@ -548,7 +548,7 @@ function App() {
             </header>
 
             <div className="flex-1 min-h-0">
-              {activeTab === "persona" && <PersonaTab agent={agent} draft={draft} setDraft={setDraft} dirty={dirty} onSave={saveDraft} onRevert={revertDraft} />}
+              {activeTab === "persona" && <PersonaTab agent={agent} draft={draft} setDraft={setDraft} dirty={dirty} onSave={saveDraft} onRevert={revertDraft} onSpriteUpdated={(a) => setAgents((as) => as.map((x) => (x.id === a.id ? a : x)))} />}
               {activeTab === "chat" && <ChatTab agent={agent} thread={chatThread} onSend={(t, atts) => sendChat(agent, t, atts)} onNewChat={() => newChat(agent.id)} />}
               {activeTab === "run" && <RunTab agent={agent} task={taskByAgent[agent.id] || ""} setTask={(v) => setTaskByAgent((m) => ({ ...m, [agent.id]: v }))} running={run.status === "running" && run.agentId === agent.id} onRun={triggerRun} onStop={stopRun} onOpenPanel={() => setPanelOpen(true)} panelOpen={panelOpen} injectContext={injectContext} setInjectContext={setInjectContext} contextInfo={contextInfo} />}
               {activeTab === "activity" && <ActivityTab agent={agent} history={history} onRerun={(task) => { setActiveTab("run"); setTaskByAgent((m) => ({ ...m, [agent.id]: task })); }} />}

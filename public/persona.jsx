@@ -87,10 +87,76 @@ function Field({ label, hint, children }) {
   );
 }
 
-function PersonaTab({ agent, draft, setDraft, dirty, onSave, onRevert }) {
+// ── Office sprite uploader (per state) ───────────────────────────────────────
+const SPRITE_STATES = [
+  { key: "idle", label: "Idle (default)" }, { key: "work", label: "Working" },
+  { key: "thinking", label: "Thinking" }, { key: "talking", label: "Talking" },
+  { key: "celebrate", label: "Celebrate" }, { key: "greet", label: "Greet" },
+];
+function SpriteSettings({ agent, onUpdated }) {
+  const [busy, setBusy] = React.useState("");
+  const fileRefs = React.useRef({});
+  const framesOf = (s) => { const v = agent.sprite && agent.sprite[s]; return v ? (Array.isArray(v) ? v : [v]) : []; };
+
+  async function upload(state, fileList) {
+    const files = Array.from(fileList || []); if (!files.length) return;
+    setBusy(state);
+    for (const f of files) {
+      const dataB64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+      try { const u = await fetch(`/api/agents/${agent.id}/sprite`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, dataB64 }) }); if (u.ok) onUpdated(await u.json()); } catch {}
+    }
+    setBusy(""); if (fileRefs.current[state]) fileRefs.current[state].value = "";
+  }
+  async function clearState(state) {
+    setBusy(state);
+    try { const u = await fetch(`/api/agents/${agent.id}/sprite?state=${state}`, { method: "DELETE" }); if (u.ok) onUpdated(await u.json()); } catch {}
+    setBusy("");
+  }
+
+  return (
+    <div className="space-y-2">
+      {SPRITE_STATES.map(({ key, label }) => {
+        const frames = framesOf(key);
+        return (
+          <div key={key} className="flex items-center gap-3 p-2.5 rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+            <div className="w-24 shrink-0">
+              <div className="text-[12.5px] font-medium" style={{ color: "var(--text)" }}>{label}</div>
+              <div className="text-[10.5px] font-mono" style={{ color: "var(--faint)" }}>{frames.length} frame{frames.length === 1 ? "" : "s"}</div>
+            </div>
+            <div className="flex-1 flex flex-wrap items-center gap-1.5 min-h-[44px]">
+              {frames.map((url, i) => (
+                <span key={i} className="grid place-items-center rounded-lg border overflow-hidden" style={{ width: 38, height: 46, borderColor: "var(--border)", background: "var(--surface-1)" }}>
+                  <img src={url} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                </span>
+              ))}
+              {frames.length === 0 && <span className="text-[11.5px]" style={{ color: "var(--faint)" }}>no sprite → falls back to idle</span>}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <input ref={(el) => (fileRefs.current[key] = el)} type="file" accept="image/*" multiple className="hidden" onChange={(e) => upload(key, e.target.files)} />
+              <button onClick={() => fileRefs.current[key] && fileRefs.current[key].click()} disabled={busy === key}
+                className="flex items-center gap-1 text-[12px] px-2.5 py-1.5 rounded-lg border transition-colors hover:bg-[var(--hover)] disabled:opacity-40" style={{ borderColor: "var(--border)", color: "var(--accent-fg)" }}>
+                <Icon name="plus" size={13} /> {busy === key ? "…" : "Add"}
+              </button>
+              {frames.length > 0 && (
+                <button onClick={() => clearState(key)} disabled={busy === key} title="Remove all frames"
+                  className="grid place-items-center w-8 h-8 rounded-lg text-[var(--muted)] hover:text-[var(--error)] hover:bg-[color-mix(in_srgb,var(--error)_12%,transparent)] transition"><Icon name="trash" size={14} /></button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <div className="text-[11px] leading-relaxed" style={{ color: "var(--faint)" }}>
+        Upload transparent PNGs (full body, feet at bottom-center). Margins auto-trimmed. 2+ frames = animated loop (ping-pong). Saved to <span className="font-mono">sprites/{agent.id}/</span>.
+      </div>
+    </div>
+  );
+}
+
+function PersonaTab({ agent, draft, setDraft, dirty, onSave, onRevert, onSpriteUpdated }) {
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [promptOpen, setPromptOpen] = React.useState(false); // system prompt collapsed by default
-  React.useEffect(() => { setPickerOpen(false); setPromptOpen(false); }, [agent.id]);
+  const [spritesOpen, setSpritesOpen] = React.useState(false);
+  React.useEffect(() => { setPickerOpen(false); setPromptOpen(false); setSpritesOpen(false); }, [agent.id]);
   const avatarAgent = { name: draft.name, color: agent.color, avatar: draft.avatar };
   const charCount = draft.body.length;
   const inputCls = "w-full h-9 px-3 rounded-lg border text-[13px] outline-none transition-colors focus:border-[color-mix(in_srgb,var(--accent)_55%,transparent)]";
@@ -187,6 +253,22 @@ function PersonaTab({ agent, draft, setDraft, dirty, onSave, onRevert }) {
                 </span>
               </button>
             )}
+          </div>
+        </Field>
+
+        {/* office sprites — upload/animation per state */}
+        <Field label="Office sprites" hint="2.5D animation per state">
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+            <button type="button" onClick={() => setSpritesOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-3 h-9 border-b transition-colors hover:bg-[var(--hover)]"
+              style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+              <span className="flex items-center gap-2">
+                <Icon name="chevron" size={14} style={{ color: "var(--muted)", transform: spritesOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                <span className="text-[12px]" style={{ color: "var(--muted)" }}>upload images / animation for the Office view</span>
+              </span>
+              <span className="text-[11px] font-medium" style={{ color: "var(--accent-fg)" }}>{spritesOpen ? "Hide" : "Edit"}</span>
+            </button>
+            {spritesOpen && <div className="p-3"><SpriteSettings agent={agent} onUpdated={onSpriteUpdated} /></div>}
           </div>
         </Field>
       </div>
