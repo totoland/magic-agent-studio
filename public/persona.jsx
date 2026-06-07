@@ -98,9 +98,20 @@ function SpriteSettings({ agent, onUpdated }) {
   const fileRefs = React.useRef({});
   const framesOf = (s) => { const v = agent.sprite && agent.sprite[s]; return v ? (Array.isArray(v) ? v : [v]) : []; };
   const [height, setHeight] = React.useState(agent.spriteHeight ?? "");
+  const [savedH, setSavedH] = React.useState(false);
+  const heightTimer = React.useRef(null);
   React.useEffect(() => { setHeight(agent.spriteHeight ?? ""); }, [agent.id]);
-  async function saveHeight() {
-    try { const u = await fetch(`/api/agents/${agent.id}/sprite-height`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ height: height === "" ? null : Number(height) }) }); if (u.ok) onUpdated(await u.json()); } catch {}
+  async function saveHeight(v) {
+    const val = v === undefined ? height : v;
+    try {
+      const u = await fetch(`/api/agents/${agent.id}/sprite-height`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ height: val === "" ? null : Number(val) }) });
+      if (u.ok) { onUpdated(await u.json()); setSavedH(true); setTimeout(() => setSavedH(false), 1300); }
+    } catch {}
+  }
+  function onHeightChange(v) {                 // auto-save 0.5s after the last edit (covers typing + spinner)
+    setHeight(v);
+    if (heightTimer.current) clearTimeout(heightTimer.current);
+    heightTimer.current = setTimeout(() => saveHeight(v), 500);
   }
 
   async function upload(state, fileList) {
@@ -123,10 +134,11 @@ function SpriteSettings({ agent, onUpdated }) {
       <div className="flex items-center gap-2 p-2.5 rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
         <span className="text-[12.5px] font-medium w-24 shrink-0" style={{ color: "var(--text)" }}>Height</span>
         <input type="number" min="8" max="60" value={height} placeholder="32"
-          onChange={(e) => setHeight(e.target.value)} onBlur={saveHeight} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+          onChange={(e) => onHeightChange(e.target.value)} onBlur={() => saveHeight(height)} onKeyDown={(e) => { if (e.key === "Enter") saveHeight(height); }}
           className="w-16 h-8 px-2 rounded-lg border text-[13px] outline-none" style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text)" }} />
         <span className="text-[12px]" style={{ color: "var(--muted)" }}>vh</span>
-        <span className="text-[11px]" style={{ color: "var(--faint)" }}>default 32 · front row; back row auto ×0.75</span>
+        {savedH && <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--success)" }}><Icon name="check" size={12} /> saved</span>}
+        <span className="text-[11px]" style={{ color: "var(--faint)" }}>default 32 · front; back ×0.75</span>
       </div>
       {SPRITE_STATES.map(({ key, label }) => {
         const frames = framesOf(key);
