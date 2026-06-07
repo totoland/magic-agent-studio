@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   listAgents, getAgent, createAgent, updateAgent, deleteAgent, duplicateAgent,
-  addSpriteFrame, clearSpriteState, AVATARS_DIR,
+  addSpriteFrame, clearSpriteState, setSpriteHeight, AVATARS_DIR,
 } from "./lib/agents.js";
 import { runAgent } from "./lib/runner.js";
 import { listRoutines, setEnabled } from "./lib/routines.js";
@@ -40,6 +40,7 @@ app.delete("/api/agents/:id", wrap(async (req, res) => res.json(await deleteAgen
 app.post("/api/agents/:id/duplicate", wrap(async (req, res) => res.json(await duplicateAgent(req.params.id))));
 app.post("/api/agents/:id/sprite", wrap(async (req, res) => res.json(await addSpriteFrame(req.params.id, req.body.state, req.body.dataB64))));
 app.delete("/api/agents/:id/sprite", wrap(async (req, res) => res.json(await clearSpriteState(req.params.id, req.query.state))));
+app.post("/api/agents/:id/sprite-height", wrap(async (req, res) => res.json(await setSpriteHeight(req.params.id, req.body.height))));
 
 // ── Routines ─────────────────────────────────────────────────────────────────
 app.get("/api/routines", wrap(async (_req, res) => res.json(await listRoutines())));

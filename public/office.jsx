@@ -88,7 +88,7 @@ function OfficeView({ agents, statesById, testStateById, transientById, busyIds,
     const n = agents.length;
     const x = n <= 1 ? 47 : 24 + i * (50 / (n - 1));
     const back = i % 2 === 1;
-    return { x, y: back ? 72 : 90, h: back ? "24vh" : "32vh" };
+    return { x, y: back ? 72 : 90, back };
   };
   return (
     <div className="w-full h-full grid place-items-center overflow-hidden" style={{ background: "#0d0b09" }}>
@@ -101,7 +101,9 @@ function OfficeView({ agents, statesById, testStateById, transientById, busyIds,
         <button onClick={onRecruit} title="Recruit a new agent" className="absolute" style={{ left: "13%", top: "56%", width: "15%", height: "16%", background: "transparent" }} />
         {/* agent floor */}
         {agents.map((a, i) => {
-          const { x, y, h } = place(i);
+          const { x, y, back } = place(i);
+          const frontH = a.spriteHeight > 0 ? a.spriteHeight : 32;      // per-agent height (vh), default 32
+          const h = (back ? frontH * 0.75 : frontH).toFixed(1) + "vh";
           const ts = testStateById[a.id];
           const st = ts || (transientById && transientById[a.id]) || statesById[a.id] || "idle"; // test > transient > live
           return <OfficeAgent key={a.id} agent={a} xPct={x} yPct={y} height={h} state={st} testing={!!ts}

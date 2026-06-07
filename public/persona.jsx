@@ -97,6 +97,11 @@ function SpriteSettings({ agent, onUpdated }) {
   const [busy, setBusy] = React.useState("");
   const fileRefs = React.useRef({});
   const framesOf = (s) => { const v = agent.sprite && agent.sprite[s]; return v ? (Array.isArray(v) ? v : [v]) : []; };
+  const [height, setHeight] = React.useState(agent.spriteHeight ?? "");
+  React.useEffect(() => { setHeight(agent.spriteHeight ?? ""); }, [agent.id]);
+  async function saveHeight() {
+    try { const u = await fetch(`/api/agents/${agent.id}/sprite-height`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ height: height === "" ? null : Number(height) }) }); if (u.ok) onUpdated(await u.json()); } catch {}
+  }
 
   async function upload(state, fileList) {
     const files = Array.from(fileList || []); if (!files.length) return;
@@ -115,6 +120,14 @@ function SpriteSettings({ agent, onUpdated }) {
 
   return (
     <div className="space-y-2">
+      <div className="flex items-center gap-2 p-2.5 rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
+        <span className="text-[12.5px] font-medium w-24 shrink-0" style={{ color: "var(--text)" }}>Height</span>
+        <input type="number" min="8" max="60" value={height} placeholder="32"
+          onChange={(e) => setHeight(e.target.value)} onBlur={saveHeight} onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+          className="w-16 h-8 px-2 rounded-lg border text-[13px] outline-none" style={{ borderColor: "var(--border)", background: "var(--surface-1)", color: "var(--text)" }} />
+        <span className="text-[12px]" style={{ color: "var(--muted)" }}>vh</span>
+        <span className="text-[11px]" style={{ color: "var(--faint)" }}>default 32 · front row; back row auto ×0.75</span>
+      </div>
       {SPRITE_STATES.map(({ key, label }) => {
         const frames = framesOf(key);
         return (
