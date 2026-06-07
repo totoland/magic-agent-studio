@@ -90,11 +90,10 @@
   [data-density="compact"] { font-size: 13.5px; }
   [data-density="comfy"] { font-size: 14px; }
 
-  /* office sprite micro-motion (so states read as alive even with near-identical frames) */
-  @keyframes spriteWork { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2.2%); } }
+  /* office sprite micro-motion. NB: only for full-character poses — not "work"
+     (that's a whole desk scene; transforming it would float the desk). */
   @keyframes spriteBreathe { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-0.8%) scale(1.006); } }
   @keyframes spriteCelebrate { 0%,100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-6%) rotate(-2deg); } 75% { transform: translateY(-6%) rotate(2deg); } }
-  .sprite-work { animation: spriteWork .55s ease-in-out infinite; transform-origin: bottom center; }
   .sprite-idle { animation: spriteBreathe 3.2s ease-in-out infinite; transform-origin: bottom center; }
   .sprite-celebrate { animation: spriteCelebrate .5s ease-in-out infinite; transform-origin: bottom center; }
 

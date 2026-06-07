@@ -27,7 +27,8 @@ function SpriteAnim({ frames, error, height, anim }) {
     }, 460);
     return () => clearInterval(t);
   }, [key]);
-  const cls = anim === "work" ? "sprite-work" : anim === "celebrate" ? "sprite-celebrate" : anim === "idle" ? "sprite-idle" : "";
+  // NB: no whole-image motion for "work" — that sprite is a full desk scene, so bobbing it moves the desk too.
+  const cls = anim === "celebrate" ? "sprite-celebrate" : anim === "idle" ? "sprite-idle" : "";
   return <img className={cls} src={frames[i]} draggable={false} style={{ height, filter: error ? "drop-shadow(0 0 5px var(--error))" : "none" }} />;
 }
 
